@@ -1,0 +1,26 @@
+.timeline-container {
+  width: 100%;
+  height: 70px;
+  background: #111;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.timeline-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.timeline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #222;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}

@@ -1,0 +1,229 @@
+.library-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.library-panel {
+  width: 580px;
+  max-width: 95vw;
+  height: calc(100vh - 16px);
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lib-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1e1e1e;
+  background: #0d0d0d;
+  flex-shrink: 0;
+}
+
+.lib-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.lib-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lib-btn {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #aaa;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.lib-btn:hover { background: #2a2a2a; color: #fff; }
+
+.lib-btn-save {
+  background: #14532d;
+  border-color: #16a34a;
+  color: #4ade80;
+}
+
+.lib-btn-save:hover { background: #166534; }
+.lib-btn-close { padding: 5px 8px; }
+
+.lib-saved-badge {
+  font-size: 11px;
+  color: #4ade80;
+  background: #0d1f0d;
+  border: 1px solid #166534;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.lib-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #444;
+  text-align: center;
+  padding: 40px;
+}
+
+.lib-empty-icon { font-size: 48px; opacity: 0.3; }
+.lib-empty p { margin: 0; font-size: 15px; color: #555; }
+.lib-empty small { font-size: 12px; color: #333; }
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.lib-card {
+  background: #0f0f0f;
+  border: 1px solid #1e1e1e;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.lib-card:hover {
+  border-color: #3b82f6;
+  background: #111827;
+}
+
+.lib-card.active {
+  border-color: #2563eb;
+  background: #0f1e33;
+}
+
+.lib-thumb {
+  position: relative;
+  aspect-ratio: 16/9;
+  background: #000;
+  overflow: hidden;
+}
+
+.lib-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lib-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #222;
+}
+
+.lib-dur {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #ddd;
+  font-size: 10px;
+  font-family: monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.lib-name {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lib-meta {
+  padding: 0 8px 6px;
+  font-size: 10px;
+  color: #444;
+  font-family: monospace;
+}
+
+.lib-rename {
+  padding: 4px 6px;
+  display: flex;
+  gap: 4px;
+}
+
+.lib-rename input {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #3b82f6;
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  outline: none;
+  min-width: 0;
+}
+
+.lib-rename button {
+  background: #1e3a5f;
+  border: 1px solid #2563eb;
+  color: #60a5fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.lib-card-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.lib-card:hover .lib-card-actions { opacity: 1; }
+
+.lib-card-actions button {
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid #333;
+  color: #aaa;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+}
+
+.lib-card-actions button:hover { background: #2a2a2a; color: #fff; }
+.lib-card-actions button.lib-remove:hover { background: #7f1d1d; color: #f87171; border-color: #ef4444; }

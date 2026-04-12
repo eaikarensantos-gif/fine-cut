@@ -1,0 +1,336 @@
+.detection-panel {
+  background: #111;
+  border-top: 1px solid #1e1e1e;
+  border-bottom: 1px solid #1e1e1e;
+  max-height: 180px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.dp-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #0d0d0d;
+}
+
+.dp-tab {
+  background: none;
+  border: 1px solid transparent;
+  color: #555;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.1s;
+}
+
+.dp-tab:hover { color: #aaa; }
+
+.dp-tab.active {
+  background: #1a1a1a;
+  border-color: #2a2a2a;
+  color: #e2e8f0;
+}
+
+.dp-badge {
+  background: #1e3a5f;
+  color: #60a5fa;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.dp-actions {
+  margin-left: auto;
+}
+
+.dp-btn-action {
+  background: #14532d;
+  border: 1px solid #16a34a;
+  color: #4ade80;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.dp-btn-action:hover {
+  background: #166534;
+  color: #86efac;
+}
+
+.dp-content {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px;
+}
+
+.dp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dp-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #0f0f0f;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.dp-item:hover { background: #1a1a1a; }
+
+.dp-silence { border-left-color: #ef4444; }
+.dp-scene   { border-left-color: #f59e0b; }
+
+.dp-item-icon { font-size: 13px; }
+
+.dp-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.dp-item-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dp-item-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.dp-time-in    { color: #f87171; }
+.dp-time-out   { color: #fca5a5; }
+.dp-time-scene { color: #fbbf24; }
+.dp-arrow      { color: #444; font-size: 10px; }
+
+.dp-dur {
+  font-size: 10px;
+  color: #555;
+  background: #1a1a1a;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.dp-seek-btn {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #666;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+  flex-shrink: 0;
+}
+
+.dp-seek-btn:hover {
+  background: #2a2a2a;
+  color: #60a5fa;
+  border-color: #3b82f6;
+}
+
+/* Resumo de silêncios */
+.dp-summary {
+  display: flex;
+  gap: 12px;
+  padding: 6px 10px;
+  background: #0d0d0d;
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.dp-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.dp-summary-icon { font-size: 11px; }
+
+.dp-summary-remove { color: #f87171; }
+.dp-summary-remove strong { color: #ef4444; }
+
+.dp-summary-keep { color: #86efac; }
+.dp-summary-keep strong { color: #4ade80; }
+
+/* Toggle skip silences */
+.dp-btn-toggle {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #666;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+
+.dp-btn-toggle:hover {
+  background: #2a2a2a;
+  color: #aaa;
+}
+
+.dp-btn-toggle.active {
+  background: #0f1e33;
+  border-color: #2563eb;
+  color: #60a5fa;
+}
+
+.dp-btn-toggle-preview.active {
+  background: #1a0a2e;
+  border-color: #7c3aed;
+  color: #c4b5fd;
+}
+
+.dp-scene-help {
+  font-size: 11px;
+  color: #444;
+  padding: 6px 10px;
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.dp-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50px;
+  color: #333;
+  font-size: 12px;
+}
+
+/* Audio type tab */
+.dp-badge-audio {
+  background: #2e1065;
+  color: #c4b5fd;
+}
+
+.dp-audio-legend {
+  display: flex;
+  gap: 12px;
+  padding: 5px 10px;
+  background: #0d0d0d;
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.dp-audio-legend-item { display: flex; align-items: center; gap: 4px; }
+.dp-audio-speech  { color: #60a5fa; }
+.dp-audio-music   { color: #c4b5fd; }
+.dp-audio-silence { color: #555; }
+
+.dp-audio-speech  { border-left-color: #3b82f6; }
+.dp-audio-music   { border-left-color: #7c3aed; }
+.dp-audio-silence { border-left-color: #374151; }
+
+.dp-item.dp-audio-speech  { border-left-color: #3b82f6; }
+.dp-item.dp-audio-music   { border-left-color: #7c3aed; }
+.dp-item.dp-audio-silence { border-left-color: #374151; }
+
+.dp-time-audio-speech  { color: #60a5fa; }
+.dp-time-audio-music   { color: #c4b5fd; }
+.dp-time-audio-silence { color: #6b7280; }
+
+/* Respiros */
+.dp-badge-breath { background: #2d1657; color: #a78bfa; }
+.dp-item.dp-breath { border-left-color: #7c3aed; }
+.dp-time-breath { color: #a78bfa; }
+
+/* Repetições */
+.dp-badge-repeat { background: #1a2e1a; color: #4ade80; }
+
+.dp-btn-action-repeats {
+  background: #14532d;
+  border-color: #16a34a;
+  color: #4ade80;
+}
+
+.dp-repeat-group {
+  background: #0d0d0d;
+  border: 1px solid #1e1e1e;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.dp-repeat-group-header {
+  font-size: 11px;
+  color: #555;
+  padding: 5px 10px;
+  background: #111;
+  border-bottom: 1px solid #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dp-item.dp-repeat-take { border-radius: 0; border-left-color: #374151; }
+.dp-item.dp-repeat-recommended { border-left-color: #16a34a; background: #0a1a0a; }
+
+.dp-time-repeat-good { color: #4ade80; }
+.dp-time-repeat-bad  { color: #6b7280; text-decoration: line-through; }
+
+/* Transcrição */
+.dp-badge-transcript { background: #1e1e3a; color: #a5b4fc; }
+
+.dp-transcript-phrase {
+  font-style: italic;
+  color: #818cf8 !important;
+  background: #1e1e3a !important;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dp-item.dp-transcript-seg {
+  border-left-color: #6366f1;
+  padding: 4px 10px;
+}
+
+.dp-item.dp-transcript-seg:hover { background: #1a1a2e; }
+
+.dp-transcript-icon {
+  font-size: 10px !important;
+  color: #6366f1;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+  min-width: 42px;
+}
+
+.dp-transcript-text {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}

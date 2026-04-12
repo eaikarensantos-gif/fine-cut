@@ -1,0 +1,3 @@
+/* Reset básico — todo estilo vive em App.css e nos componentes */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }

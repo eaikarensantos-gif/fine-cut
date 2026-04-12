@@ -1,0 +1,145 @@
+.cut-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #111;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cut-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.cut-list-total {
+  font-family: 'Courier New', monospace;
+  color: #60a5fa;
+  font-size: 11px;
+}
+
+.cut-list-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  gap: 4px;
+  padding: 20px;
+  text-align: center;
+}
+
+.cut-list-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.cut-list-empty small {
+  font-size: 11px;
+  color: #2a2a2a;
+}
+
+.cut-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cut-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+
+.cut-item:hover {
+  background: #1a1a1a;
+}
+
+.cut-item.selected {
+  background: #0f1e33;
+  border-color: #2563eb;
+}
+
+.cut-index {
+  font-size: 11px;
+  color: #555;
+  min-width: 24px;
+  font-family: monospace;
+}
+
+.cut-times {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.cut-arrow {
+  color: #444;
+  font-size: 10px;
+}
+
+.cut-in  { color: #4ade80; }
+.cut-out { color: #f87171; }
+
+.cut-dur {
+  font-size: 10px;
+  color: #555;
+}
+
+.cut-remove {
+  background: none;
+  border: none;
+  color: #444;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.1s;
+}
+
+.cut-remove:hover {
+  color: #ef4444;
+}
+
+.cut-list-footer {
+  padding: 8px;
+  border-top: 1px solid #1e1e1e;
+}
+
+.btn-clear {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #555;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.btn-clear:hover {
+  background: #2a1a1a;
+  border-color: #7f1d1d;
+  color: #f87171;
+}
