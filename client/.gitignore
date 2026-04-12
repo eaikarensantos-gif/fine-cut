@@ -8,8 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
 dist-ssr
+# dist é commitado para deploy no Railway sem rebuild
 *.local
 
 # Editor directories and files

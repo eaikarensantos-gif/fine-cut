@@ -16,7 +16,6 @@ export function useVideoPlayer() {
       if (!v) { rafRef.current = requestAnimationFrame(tick); return; }
 
       const { skipSilences, silences, previewSegments, segments } = useEditorStore.getState();
-      const t = v.currentTime;
 
       if (!v.paused) {
         // --- Modo 1: preview com cortes (pula regiões fora dos segmentos) ---
