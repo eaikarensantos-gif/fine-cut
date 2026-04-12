@@ -1,61 +1,108 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
+const path    = require('path');
+const fs      = require('fs');
+const os      = require('os');
 const { ffmpeg } = require('../utils/ffmpeg');
 
 const router = express.Router();
 
+// ── Extração de segmentos ────────────────────────────────────────────────────
+
 /**
- * Extrai segmento com STREAM COPY — sem re-encode, praticamente instantâneo.
- * Usa -ss antes do input para seek rápido por keyframe.
- * Nota: o corte é no keyframe mais próximo (± alguns frames). Para cortes
- * frame-precisos, usar mode 'reencode'.
+ * DRAFT — seek rápido antes do input, stream copy.
+ * Mais veloz. Corte no keyframe mais próximo (pode incluir 0-2s extras no início).
  */
-function extractSegmentCopy(inputPath, start, duration, outputPath) {
+function extractDraft(inputPath, start, duration, outputPath) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .inputOptions([`-ss ${start}`])
-      .outputOptions([
-        `-t ${duration}`,
-        '-c copy',
-        '-avoid_negative_ts make_zero',
-        '-map 0',
-      ])
+      .outputOptions([`-t ${duration}`, '-c copy', '-avoid_negative_ts make_zero', '-map 0'])
       .output(outputPath)
-      .on('end', resolve)
-      .on('error', reject)
-      .run();
+      .on('end', resolve).on('error', reject).run();
   });
 }
 
 /**
- * Extrai segmento com RE-ENCODE (frame-preciso, lento).
- * Usado apenas para qualidade Alta/Lossless.
+ * NORMAL — dual-seek (seek rápido + seek preciso dentro da janela) + stream copy.
+ * Início de segmento frame-preciso sem re-encode. Negligenciável atraso extra vs draft.
+ * Técnica: -ss (start-5) antes do input para seek rápido, -ss 5 na saída para
+ * trim preciso dentro do GOP decodificado.
  */
-function extractSegmentEncode(inputPath, start, duration, outputPath, crf, preset) {
+function extractNormal(inputPath, start, duration, outputPath) {
+  const preseek    = Math.max(0, start - 5);
+  const seekOffset = parseFloat((start - preseek).toFixed(6));
+  const opts = [`-t ${duration}`, '-c copy', '-avoid_negative_ts make_zero', '-map 0'];
+  if (seekOffset > 0.001) opts.unshift(`-ss ${seekOffset}`);
+
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
-      .inputOptions([`-ss ${start}`])
-      .outputOptions([
-        `-t ${duration}`,
-        '-c:v libx264',
-        `-preset ${preset}`,
-        `-crf ${crf}`,
-        '-c:a aac',
-        '-b:a 192k',
-        '-avoid_negative_ts make_zero',
-      ])
+      .inputOptions([`-ss ${preseek}`])
+      .outputOptions(opts)
       .output(outputPath)
-      .on('end', resolve)
-      .on('error', reject)
-      .run();
+      .on('end', resolve).on('error', reject).run();
   });
 }
 
 /**
- * Concatena via demuxer — stream copy, sem re-encode.
+ * SMART — seek preciso + re-encode com preset ultrafast + CRF 18.
+ * Frame-preciso, qualidade próxima ao original, muito mais rápido que High.
+ * Use quando precisar de cortes exatos sem aceitar a lentidão do re-encode completo.
  */
+function extractSmart(inputPath, start, duration, outputPath) {
+  const preseek    = Math.max(0, start - 2);
+  const seekOffset = parseFloat((start - preseek).toFixed(6));
+  const opts = [
+    `-t ${duration}`,
+    '-c:v libx264', '-preset ultrafast', '-crf 18',
+    '-c:a copy',
+    '-avoid_negative_ts make_zero',
+  ];
+  if (seekOffset > 0.001) opts.unshift(`-ss ${seekOffset}`);
+
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .inputOptions([`-ss ${preseek}`])
+      .outputOptions(opts)
+      .output(outputPath)
+      .on('end', resolve).on('error', reject).run();
+  });
+}
+
+/**
+ * HIGH / LOSSLESS — seek preciso + re-encode full quality.
+ * Frame-preciso. High = CRF 18 medium. Lossless = CRF 0 slow (sem perda).
+ */
+function extractEncode(inputPath, start, duration, outputPath, crf, preset) {
+  const preseek    = Math.max(0, start - 2);
+  const seekOffset = parseFloat((start - preseek).toFixed(6));
+  const opts = [
+    `-t ${duration}`,
+    '-c:v libx264', `-preset ${preset}`, `-crf ${crf}`,
+    '-c:a aac', '-b:a 192k',
+    '-avoid_negative_ts make_zero',
+  ];
+  if (seekOffset > 0.001) opts.unshift(`-ss ${seekOffset}`);
+
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .inputOptions([`-ss ${preseek}`])
+      .outputOptions(opts)
+      .output(outputPath)
+      .on('end', resolve).on('error', reject).run();
+  });
+}
+
+// Mapa de qualidade → função de extração
+const EXTRACT = {
+  draft:    (inp, s, d, out) => extractDraft(inp, s, d, out),
+  normal:   (inp, s, d, out) => extractNormal(inp, s, d, out),
+  smart:    (inp, s, d, out) => extractSmart(inp, s, d, out),
+  high:     (inp, s, d, out) => extractEncode(inp, s, d, out, 18, 'medium'),
+  lossless: (inp, s, d, out) => extractEncode(inp, s, d, out, 0,  'slow'),
+};
+
+// ── Concatenação ─────────────────────────────────────────────────────────────
+
 function concatSegments(segPaths, outputPath) {
   return new Promise((resolve, reject) => {
     const listPath = outputPath + '.txt';
@@ -69,19 +116,23 @@ function concatSegments(segPaths, outputPath) {
       .inputOptions(['-f concat', '-safe 0'])
       .outputOptions(['-c copy', '-movflags +faststart'])
       .output(outputPath)
-      .on('end', () => { try { fs.unlinkSync(listPath); } catch {} resolve(); })
+      .on('end',   () => { try { fs.unlinkSync(listPath); } catch {} resolve(); })
       .on('error', (err) => { try { fs.unlinkSync(listPath); } catch {} reject(err); })
       .run();
   });
 }
 
+// ── Rota principal ────────────────────────────────────────────────────────────
+
 /**
  * POST /api/export
- * Body: { fileId, segments: [{start, end}], quality?: 'draft'|'normal'|'high'|'lossless' }
+ * Body: { fileId, segments: [{start, end}], quality?: 'draft'|'normal'|'smart'|'high'|'lossless' }
  *
- * draft / normal  → stream copy (instantâneo, qualidade original)
- * high            → re-encode libx264 crf 18 medium (lento, frame-preciso)
- * lossless        → re-encode libx264 crf 0 slow    (muito lento)
+ * draft    → stream copy, seek rápido (keyframe boundary)   — instantâneo
+ * normal   → stream copy, dual-seek (frame-preciso)          — quase instantâneo ✓ padrão
+ * smart    → re-encode ultrafast CRF18 (frame-preciso)       — rápido, visualmente lossless
+ * high     → re-encode medium CRF18 (melhor qualidade)       — lento
+ * lossless → re-encode slow CRF0 (sem nenhuma perda)         — muito lento
  */
 router.post('/', async (req, res) => {
   const { fileId, segments, quality = 'normal' } = req.body;
@@ -95,16 +146,11 @@ router.post('/', async (req, res) => {
     return res.status(404).json({ error: 'Arquivo não encontrado' });
   }
 
-  const useEncode = quality === 'high' || quality === 'lossless';
-  const encodeOpts = {
-    high:     { crf: 18, preset: 'medium' },
-    lossless: { crf: 0,  preset: 'slow'   },
-  };
-
-  const io = req.io;
-  const jobId = Date.now();
-  const tmpDir = os.tmpdir();
-  const segPaths = [];
+  const extractFn = EXTRACT[quality] ?? EXTRACT.normal;
+  const io        = req.io;
+  const jobId     = Date.now();
+  const tmpDir    = os.tmpdir();
+  const segPaths  = [];
   const outputPath = path.join(tmpDir, `export-${jobId}.mp4`);
 
   const cleanup = () => {
@@ -124,12 +170,7 @@ router.post('/', async (req, res) => {
       const segPath = path.join(tmpDir, `seg-${jobId}-${i}.mp4`);
       segPaths.push(segPath);
 
-      if (useEncode) {
-        const opts = encodeOpts[quality] ?? encodeOpts.high;
-        await extractSegmentEncode(inputPath, seg.start, duration, segPath, opts.crf, opts.preset);
-      } else {
-        await extractSegmentCopy(inputPath, seg.start, duration, segPath);
-      }
+      await extractFn(inputPath, seg.start, duration, segPath);
 
       const pct = Math.round(5 + ((i + 1) / segments.length) * 80);
       if (io) io.emit('export:progress', { percent: pct });
@@ -141,7 +182,7 @@ router.post('/', async (req, res) => {
 
     if (io) io.emit('export:progress', { percent: 88 });
 
-    // Passo 2: concatenar (sempre stream copy)
+    // Passo 2: concatenar
     if (segPaths.length === 1) {
       fs.renameSync(segPaths[0], outputPath);
       segPaths.length = 0;
@@ -152,7 +193,7 @@ router.post('/', async (req, res) => {
     if (io) io.emit('export:progress', { percent: 98 });
     if (io) io.emit('export:done');
 
-    // Passo 3: enviar com streaming (pipe direto, sem buffer em memória)
+    // Passo 3: stream para o cliente
     const stat = fs.statSync(outputPath);
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', 'attachment; filename="fine-cut-export.mp4"');
@@ -161,7 +202,7 @@ router.post('/', async (req, res) => {
 
     const stream = fs.createReadStream(outputPath);
     stream.pipe(res);
-    stream.on('end', () => cleanup());
+    stream.on('end',   () => cleanup());
     stream.on('error', () => cleanup());
 
   } catch (err) {

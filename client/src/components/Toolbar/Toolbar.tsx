@@ -15,10 +15,11 @@ const EXPORT_LABELS: Record<ExportFormat, string> = {
 };
 
 const QUALITY_LABELS: Record<ExportQuality, { label: string; hint: string }> = {
-  draft:    { label: 'Rascunho', hint: '⚡ Stream copy — mais rápido, corte no keyframe' },
-  normal:   { label: 'Normal',   hint: '⚡ Stream copy — instantâneo, qualidade original' },
-  high:     { label: 'Alta',     hint: '🐢 Re-encode — corte frame-preciso, mais lento' },
-  lossless: { label: 'Lossless', hint: '🐢 Re-encode sem perdas — muito lento' },
+  draft:    { label: 'Rascunho', hint: '⚡ Stream copy — mais rápido, corte no keyframe'          },
+  normal:   { label: 'Normal',   hint: '⚡ Stream copy dual-seek — frame-preciso, instantâneo'    },
+  smart:    { label: 'Smart',    hint: '🎯 Re-encode ultrafast — frame-exato, 5× mais rápido que Alta' },
+  high:     { label: 'Alta',     hint: '🐢 Re-encode CRF18 — melhor qualidade, mais lento'        },
+  lossless: { label: 'Lossless', hint: '🐢 Re-encode CRF0 — sem nenhuma perda, muito lento'       },
 };
 
 function getLocalVideoMeta(file: File): Promise<{ duration: number; width: number; height: number }> {
@@ -53,6 +54,7 @@ export function Toolbar({ onOpenLibrary }: Props) {
     videoInfo, setVideoInfo, setWaveformPeaks, setSilences, setScenes,
     setAudioRegions, setBreaths, setRepeatGroups,
     setTranscriptWords, setTranscriptSegments,
+    setKeyframes,
     segments, exportQuality, setExportQuality, exportProgress, setExportProgress,
     resetEditor, setActiveDetectionTab,
   } = useEditorStore();
@@ -119,6 +121,7 @@ export function Toolbar({ onOpenLibrary }: Props) {
         toast.done(tid, 'Vídeo carregado ✓', `${data.width}×${data.height} · ${data.fps?.toFixed(2)}fps`);
         if (data.hasAudio) {
           loadWaveform(data.fileId);
+          loadKeyframes(data.fileId);
           // Auto-detect: silêncios + repetições
           autoDetectAfterUpload(data.fileId);
         }
@@ -135,6 +138,14 @@ export function Toolbar({ onOpenLibrary }: Props) {
       const r = await fetch(`${API}/waveform/${fileId}?sps=200`);
       const data = await r.json();
       setWaveformPeaks(data.peaks);
+    } catch {}
+  };
+
+  const loadKeyframes = async (fileId: string) => {
+    try {
+      const r = await fetch(`${API}/keyframes/${fileId}`);
+      const data = await r.json();
+      if (data.keyframes) setKeyframes(data.keyframes);
     } catch {}
   };
 

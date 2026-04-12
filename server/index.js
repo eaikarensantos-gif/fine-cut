@@ -14,7 +14,8 @@ const detectBreathsRoute   = require('./routes/detectBreaths');
 const detectRepeatsRoute   = require('./routes/detectRepeats');
 const transcribeRoute      = require('./routes/transcribe');
 const detectRepeatsTranscriptRoute = require('./routes/detectRepeatsFromTranscript');
-const libraryRoute = require('./routes/library');
+const libraryRoute   = require('./routes/library');
+const keyframesRoute = require('./routes/keyframes');
 
 const app = express();
 const server = http.createServer(app);
@@ -54,7 +55,8 @@ app.use('/api/detect-breaths',    detectBreathsRoute);
 app.use('/api/detect-repeats',    detectRepeatsRoute);
 app.use('/api/transcribe',        transcribeRoute);
 app.use('/api/detect-repeats-transcript', detectRepeatsTranscriptRoute);
-app.use('/api/library', libraryRoute);
+app.use('/api/library',   libraryRoute);
+app.use('/api/keyframes', keyframesRoute);
 
 // SPA fallback: rotas que não são /api nem /videos servem o index.html
 app.get('*', (req, res) => {

@@ -11,7 +11,7 @@ export function DetectionPanel() {
   const {
     silences, scenes, audioRegions, breaths, repeatGroups, videoInfo,
     transcriptWords, transcriptSegments,
-    setCurrentTime, addSegment, segments,
+    setCurrentTime, setSegmentsBatch, segments,
     skipSilences, setSkipSilences, previewSegments, setPreviewSegments,
     activeDetectionTab, setActiveDetectionTab,
   } = useEditorStore();
@@ -122,8 +122,7 @@ export function DetectionPanel() {
       toast.error('Nenhuma fala detectada', 'Ajuste os parâmetros de detecção e tente novamente.');
       return;
     }
-    useEditorStore.getState().reorderSegments([]);
-    regions.forEach((r) => addSegment({ start: r.start, end: r.end }));
+    setSegmentsBatch(regions);
     setSkipSilences(false);
     setPreviewSegments(true);
     toast.success(
@@ -142,8 +141,7 @@ export function DetectionPanel() {
       cursor = sc.time;
     }
     if (duration - cursor > 0.1) regions.push({ start: cursor, end: duration });
-    useEditorStore.getState().reorderSegments([]);
-    regions.forEach((r) => addSegment({ start: r.start, end: r.end }));
+    setSegmentsBatch(regions);
     setPreviewSegments(true);
     toast.success(
       `${regions.length} cena${regions.length > 1 ? 's' : ''} adicionada${regions.length > 1 ? 's' : ''}`,
@@ -181,8 +179,7 @@ export function DetectionPanel() {
     }
 
     const removed = segs.length === 0 ? badRanges.length : segs.length - newSegs.length;
-    store.reorderSegments([]);
-    newSegs.forEach(s => addSegment({ start: s.start, end: s.end }));
+    setSegmentsBatch(newSegs);
     setPreviewSegments(true);
     toast.success(
       `${removed} take${removed !== 1 ? 's' : ''} removido${removed !== 1 ? 's' : ''}`,
@@ -298,8 +295,7 @@ export function DetectionPanel() {
                   if (seg.end - cursor > 0.05) newSegs.push({ start: cursor, end: seg.end });
                 }
 
-                store.reorderSegments([]);
-                newSegs.forEach(s => addSegment(s));
+                setSegmentsBatch(newSegs);
                 setPreviewSegments(true);
                 toast.success(`${breaths.length} respiro${breaths.length > 1 ? 's' : ''} removido${breaths.length > 1 ? 's' : ''}`, `${newSegs.length} segmentos resultantes`);
               }}
@@ -325,8 +321,7 @@ export function DetectionPanel() {
               onClick={() => {
                 const speechOnly = audioRegions.filter((r) => r.type === 'speech');
                 if (speechOnly.length === 0) { toast.error('Nenhuma voz detectada', 'Tente rodar a análise Voz/Música novamente.'); return; }
-                useEditorStore.getState().reorderSegments([]);
-                speechOnly.forEach((r) => addSegment({ start: r.start, end: r.end }));
+                setSegmentsBatch(speechOnly);
                 setPreviewSegments(true);
                 const dur = speechOnly.reduce((a, r) => a + (r.end - r.start), 0);
                 toast.success(

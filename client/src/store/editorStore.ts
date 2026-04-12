@@ -81,24 +81,38 @@ export interface LibraryEntry {
   addedAt: string;
 }
 
-export type ExportQuality = 'draft' | 'normal' | 'high' | 'lossless';
+export type ExportQuality = 'draft' | 'normal' | 'smart' | 'high' | 'lossless';
+
+// ── Helpers internos ─────────────────────────────────────────────────────────
+
+const MAX_HISTORY = 30;
+
+function pushHistory(history: CutSegment[][], current: CutSegment[]): CutSegment[][] {
+  return [...history.slice(-(MAX_HISTORY - 1)), current];
+}
+
+function genId(): string {
+  return `seg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// ── Interface ─────────────────────────────────────────────────────────────────
 
 interface EditorState {
-  // Vídeo carregado
   videoInfo: VideoInfo | null;
   setVideoInfo: (info: VideoInfo) => void;
 
-  // Waveform
   waveformPeaks: number[];
   setWaveformPeaks: (peaks: number[]) => void;
 
-  // Silêncios e cenas detectados
+  // Keyframes do vídeo (para display na waveform + orientar cortes)
+  keyframes: number[];
+  setKeyframes: (kfs: number[]) => void;
+
   silences: SilenceRegion[];
   setSilences: (s: SilenceRegion[]) => void;
   scenes: SceneMarker[];
   setScenes: (s: SceneMarker[]) => void;
 
-  // Playback
   currentTime: number;
   setCurrentTime: (t: number) => void;
   isPlaying: boolean;
@@ -106,70 +120,67 @@ interface EditorState {
   playbackRate: number;
   setPlaybackRate: (r: number) => void;
 
-  // Pontos de corte
   inPoint: number | null;
   outPoint: number | null;
   setInPoint: (t: number | null) => void;
   setOutPoint: (t: number | null) => void;
 
-  // Lista de segmentos confirmados
+  // Segmentos confirmados
   segments: CutSegment[];
   addSegment: (seg: Omit<CutSegment, 'id'>) => void;
   removeSegment: (id: string) => void;
   updateSegment: (id: string, patch: Partial<Omit<CutSegment, 'id'>>) => void;
   reorderSegments: (segments: CutSegment[]) => void;
+  /** Substitui todos os segmentos de uma vez — 1 entrada no histórico */
+  setSegmentsBatch: (segs: Omit<CutSegment, 'id'>[]) => void;
 
-  // Segmento selecionado na lista
+  // Undo / redo de segmentos
+  segmentHistory: CutSegment[][];
+  segmentFuture:  CutSegment[][];
+  undoSegments: () => void;
+  redoSegments: () => void;
+
   selectedSegmentId: string | null;
   setSelectedSegmentId: (id: string | null) => void;
 
-  // Modo skip silences
   skipSilences: boolean;
   setSkipSilences: (v: boolean) => void;
 
-  // Preview com cortes: só reproduz dentro dos segmentos definidos
   previewSegments: boolean;
   setPreviewSegments: (v: boolean) => void;
 
-  // Detecção de tipo de áudio (música vs voz)
   audioRegions: AudioRegion[];
   setAudioRegions: (r: AudioRegion[]) => void;
 
-  // Respiros detectados
   breaths: BreathRegion[];
   setBreaths: (b: BreathRegion[]) => void;
 
-  // Transcrição (Whisper)
   transcriptWords: TranscriptWord[];
   setTranscriptWords: (w: TranscriptWord[]) => void;
   transcriptSegments: TranscriptSegment[];
   setTranscriptSegments: (s: TranscriptSegment[]) => void;
 
-  // Grupos de repetições (retakes)
   repeatGroups: RepeatGroup[];
   setRepeatGroups: (g: RepeatGroup[]) => void;
 
-  // Qualidade de exportação
   exportQuality: ExportQuality;
   setExportQuality: (q: ExportQuality) => void;
 
-  // Biblioteca de arquivos
   library: LibraryEntry[];
   setLibrary: (entries: LibraryEntry[]) => void;
   addToLibrary: (entry: LibraryEntry) => void;
   removeFromLibrary: (id: string) => void;
 
-  // Estado de exportação
   exportProgress: number;
   setExportProgress: (p: number) => void;
 
-  // Aba ativa no painel de detecção (para auto-switch programático)
   activeDetectionTab: string | null;
   setActiveDetectionTab: (tab: string | null) => void;
 
-  // Reset completo ao trocar de vídeo
   resetEditor: () => void;
 }
+
+// ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useEditorStore = create<EditorState>((set) => ({
   videoInfo: null,
@@ -177,6 +188,9 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   waveformPeaks: [],
   setWaveformPeaks: (peaks) => set({ waveformPeaks: peaks }),
+
+  keyframes: [],
+  setKeyframes: (keyframes) => set({ keyframes }),
 
   silences: [],
   setSilences: (silences) => set({ silences }),
@@ -198,17 +212,57 @@ export const useEditorStore = create<EditorState>((set) => ({
   segments: [],
   addSegment: (seg) =>
     set((s) => ({
-      segments: [
-        ...s.segments,
-        { ...seg, id: `seg-${Date.now()}-${Math.random().toString(36).slice(2)}` },
-      ],
+      segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      segmentFuture:  [],
+      segments: [...s.segments, { ...seg, id: genId() }],
     })),
-  removeSegment: (id) => set((s) => ({ segments: s.segments.filter((x) => x.id !== id) })),
+  removeSegment: (id) =>
+    set((s) => ({
+      segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      segmentFuture:  [],
+      segments: s.segments.filter((x) => x.id !== id),
+    })),
   updateSegment: (id, patch) =>
     set((s) => ({
+      segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      segmentFuture:  [],
       segments: s.segments.map((x) => (x.id === id ? { ...x, ...patch } : x)),
     })),
-  reorderSegments: (segments) => set({ segments }),
+  reorderSegments: (segments) =>
+    set((s) => ({
+      segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      segmentFuture:  [],
+      segments,
+    })),
+  setSegmentsBatch: (segs) =>
+    set((s) => ({
+      segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      segmentFuture:  [],
+      segments: segs.map((seg) => ({ ...seg, id: genId() })),
+    })),
+
+  segmentHistory: [],
+  segmentFuture:  [],
+  undoSegments: () =>
+    set((s) => {
+      if (s.segmentHistory.length === 0) return {};
+      const prev = s.segmentHistory[s.segmentHistory.length - 1];
+      return {
+        segments:        prev,
+        segmentHistory:  s.segmentHistory.slice(0, -1),
+        segmentFuture:   [s.segments, ...s.segmentFuture.slice(0, MAX_HISTORY - 1)],
+      };
+    }),
+  redoSegments: () =>
+    set((s) => {
+      if (s.segmentFuture.length === 0) return {};
+      const next = s.segmentFuture[0];
+      return {
+        segments:       next,
+        segmentFuture:  s.segmentFuture.slice(1),
+        segmentHistory: pushHistory(s.segmentHistory, s.segments),
+      };
+    }),
 
   selectedSegmentId: null,
   setSelectedSegmentId: (selectedSegmentId) => set({ selectedSegmentId }),
@@ -248,26 +302,28 @@ export const useEditorStore = create<EditorState>((set) => ({
   setActiveDetectionTab: (activeDetectionTab) => set({ activeDetectionTab }),
 
   resetEditor: () => set({
-    videoInfo: null,
-    waveformPeaks: [],
-    silences: [],
-    scenes: [],
-    currentTime: 0,
-    isPlaying: false,
-    playbackRate: 1,
-    inPoint: null,
-    outPoint: null,
-    segments: [],
+    videoInfo:       null,
+    waveformPeaks:   [],
+    keyframes:       [],
+    silences:        [],
+    scenes:          [],
+    currentTime:     0,
+    isPlaying:       false,
+    playbackRate:    1,
+    inPoint:         null,
+    outPoint:        null,
+    segments:        [],
+    segmentHistory:  [],
+    segmentFuture:   [],
     selectedSegmentId: null,
-    skipSilences: false,
+    skipSilences:    false,
     previewSegments: false,
-    audioRegions: [],
-    breaths: [],
+    audioRegions:    [],
+    breaths:         [],
     transcriptWords: [],
     transcriptSegments: [],
-    repeatGroups: [],
-    exportQuality: 'normal',
-    exportProgress: 0,
+    repeatGroups:    [],
+    exportProgress:  0,
     activeDetectionTab: null,
   }),
 }));
