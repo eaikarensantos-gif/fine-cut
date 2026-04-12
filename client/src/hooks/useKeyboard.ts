@@ -1,12 +1,13 @@
 /**
- * Sistema de atalhos de teclado — baseado no padrão modifier-Set do LosslessCut
- * (reimplementação independente; GPL-2.0 inspiração)
+ * Sistema de atalhos de teclado com modifier-Set.
  *
- * Cada atalho é declarado como { code, mods?, action, description }.
- * Os modificadores são comparados via Set para suporte confiável a combos.
+ * IMPORTANTE: usa useRef para os handlers — o effect só é registrado UMA vez
+ * e sempre acessa os callbacks mais recentes via ref. Isso evita o bug de
+ * re-registrar o event listener a cada render (que acontecia quando o
+ * VideoPlayer subscrevia currentTime e re-renderizava a 60fps).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../store/editorStore';
 import { toast } from '../store/toastStore';
 
@@ -18,7 +19,7 @@ interface Shortcut {
   action: () => void;
 }
 
-interface KeyboardHandlers {
+export interface KeyboardHandlers {
   togglePlay: () => void;
   stepFrames: (n: number) => void;
   pressJ: () => void;
@@ -43,12 +44,21 @@ function modsMatch(pressed: Set<Mod>, required: Mod[] = []): boolean {
 }
 
 export function useKeyboard(handlers: KeyboardHandlers) {
+  // Ref sempre atualizado — o effect não precisa re-executar quando handlers muda
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Não interferir quando foco está em campo de texto
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) return;
 
+      const h = handlersRef.current;
       const {
         currentTime, videoInfo,
         inPoint, outPoint,
@@ -61,34 +71,34 @@ export function useKeyboard(handlers: KeyboardHandlers) {
 
       const mods = getMods(e);
 
-      // ── Definição de atalhos ────────────────────────────────────────────────
       const shortcuts: Shortcut[] = [
-
         // Playback
-        { code: 'Space', action: handlers.togglePlay },
-        { code: 'KeyK',  action: handlers.pressK },
-        { code: 'KeyJ',  action: handlers.pressJ },
-        { code: 'KeyL',  action: handlers.pressL },
+        { code: 'Space', action: h.togglePlay },
+        { code: 'KeyK',  action: h.pressK },
+        { code: 'KeyJ',  action: h.pressJ },
+        { code: 'KeyL',  action: h.pressL },
 
-        // Frame stepping — setas (sem modifier = 1 frame, Shift = 10 frames)
-        { code: 'ArrowLeft',  action: () => handlers.stepFrames(-1)  },
-        { code: 'ArrowRight', action: () => handlers.stepFrames(1)   },
-        { code: 'ArrowLeft',  mods: ['shift'], action: () => handlers.stepFrames(-10) },
-        { code: 'ArrowRight', mods: ['shift'], action: () => handlers.stepFrames(10)  },
+        // Frame stepping
+        { code: 'ArrowLeft',  action: () => h.stepFrames(-1)  },
+        { code: 'ArrowRight', action: () => h.stepFrames(1)   },
+        { code: 'ArrowLeft',  mods: ['shift'], action: () => h.stepFrames(-10) },
+        { code: 'ArrowRight', mods: ['shift'], action: () => h.stepFrames(10)  },
 
-        // Frame stepping — vírgula/ponto (estilo Premiere)
-        { code: 'Comma',  action: () => handlers.stepFrames(-1) },
-        { code: 'Period', action: () => handlers.stepFrames(1)  },
+        // Premiere-style frame stepping
+        { code: 'Comma',  action: () => h.stepFrames(-1) },
+        { code: 'Period', action: () => h.stepFrames(1)  },
 
-        // Marcação de in/out
-        { code: 'KeyI', action: () => { setInPoint(currentTime);  } },
-        { code: 'KeyO', action: () => { setOutPoint(currentTime); } },
+        // In / Out
+        { code: 'KeyI', action: () => setInPoint(currentTime)  },
+        { code: 'KeyO', action: () => setOutPoint(currentTime) },
 
         // Navegar para in/out
-        { code: 'BracketLeft',  action: () => { if (inPoint  !== null) handlers.seekTo(inPoint);  } },
-        { code: 'BracketRight', action: () => { if (outPoint !== null) handlers.seekTo(outPoint); } },
+        { code: 'BracketLeft',  action: () => { if (inPoint  !== null) h.seekTo(inPoint);  } },
+        { code: 'BracketRight', action: () => { if (outPoint !== null) h.seekTo(outPoint); } },
+        { code: 'KeyI', mods: ['shift'], action: () => { if (inPoint  !== null) h.seekTo(inPoint);  } },
+        { code: 'KeyO', mods: ['shift'], action: () => { if (outPoint !== null) h.seekTo(outPoint); } },
 
-        // Confirmar corte (Enter)
+        // Confirmar corte
         {
           code: 'Enter',
           action: () => {
@@ -103,41 +113,20 @@ export function useKeyboard(handlers: KeyboardHandlers) {
           },
         },
 
-        // Deletar segmento selecionado
+        // Deletar segmento
         { code: 'Delete',    action: () => { if (selectedSegmentId) removeSegment(selectedSegmentId); } },
         { code: 'Backspace', action: () => { if (selectedSegmentId) removeSegment(selectedSegmentId); } },
 
-        // Ir ao início / fim
-        { code: 'Home', action: () => handlers.seekTo(0) },
-        { code: 'End',  action: () => { if (videoInfo) handlers.seekTo(videoInfo.duration); } },
+        // Navegação
+        { code: 'Home', action: () => h.seekTo(0) },
+        { code: 'End',  action: () => { if (videoInfo) h.seekTo(videoInfo.duration); } },
 
         // Undo / Redo
-        {
-          code: 'KeyZ', mods: ['ctrl'],
-          action: () => {
-            undoSegments();
-            toast.info('↩ Undo', 'Segmentos restaurados');
-          },
-        },
-        {
-          code: 'KeyZ', mods: ['ctrl', 'shift'],
-          action: () => {
-            redoSegments();
-            toast.info('↪ Redo', 'Segmentos refeitos');
-          },
-        },
-        {
-          code: 'KeyY', mods: ['ctrl'],
-          action: () => {
-            redoSegments();
-            toast.info('↪ Redo', 'Segmentos refeitos');
-          },
-        },
+        { code: 'KeyZ', mods: ['ctrl'],         action: () => { undoSegments(); toast.info('↩ Undo', 'Segmentos restaurados'); } },
+        { code: 'KeyZ', mods: ['ctrl', 'shift'], action: () => { redoSegments(); toast.info('↪ Redo', 'Segmentos refeitos');    } },
+        { code: 'KeyY', mods: ['ctrl'],          action: () => { redoSegments(); toast.info('↪ Redo', 'Segmentos refeitos');    } },
 
-        // Selecionar tudo / desselecionar (para uso futuro)
-        // { code: 'KeyA', mods: ['ctrl'], action: () => { /* select all */ } },
-
-        // Duplicar segmento selecionado
+        // Duplicar segmento
         {
           code: 'KeyD', mods: ['ctrl'],
           action: () => {
@@ -146,13 +135,8 @@ export function useKeyboard(handlers: KeyboardHandlers) {
             if (seg) addSegment({ start: seg.start, end: seg.end });
           },
         },
-
-        // Ir para o marcador de in/out usando Shift+I e Shift+O (estilo FCP)
-        { code: 'KeyI', mods: ['shift'], action: () => { if (inPoint  !== null) handlers.seekTo(inPoint);  } },
-        { code: 'KeyO', mods: ['shift'], action: () => { if (outPoint !== null) handlers.seekTo(outPoint); } },
       ];
 
-      // ── Matching ───────────────────────────────────────────────────────────
       for (const sc of shortcuts) {
         if (e.code === sc.code && modsMatch(mods, sc.mods)) {
           e.preventDefault();
@@ -164,28 +148,25 @@ export function useKeyboard(handlers: KeyboardHandlers) {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlers]);
+  }, []); // ← deps vazio: registra UMA vez, acessa handlers via ref
 }
 
-// ── Tabela de atalhos para exibição na UI ─────────────────────────────────────
-
+// Tabela de atalhos para exibição
 export const SHORTCUT_TABLE = [
-  { keys: 'Space',      label: 'Play / Pause' },
-  { keys: 'K',         label: 'Pause' },
-  { keys: 'J',         label: 'Play reverso (acumula velocidade)' },
-  { keys: 'L',         label: 'Play (acumula velocidade)' },
-  { keys: '← / →',     label: '±1 frame' },
-  { keys: 'Shift+← / →', label: '±10 frames' },
-  { keys: ', / .',      label: '±1 frame (Premiere-style)' },
-  { keys: 'I',          label: 'Marcar In point' },
-  { keys: 'O',          label: 'Marcar Out point' },
-  { keys: 'Shift+I',    label: 'Ir ao In point' },
-  { keys: 'Shift+O',    label: 'Ir ao Out point' },
-  { keys: '[ / ]',      label: 'Ir ao In / Out point' },
-  { keys: 'Enter',      label: 'Confirmar corte' },
-  { keys: 'Delete',     label: 'Remover segmento selecionado' },
-  { keys: 'Home / End', label: 'Ir ao início / fim' },
-  { keys: 'Ctrl+Z',     label: 'Desfazer (segmentos)' },
-  { keys: 'Ctrl+Shift+Z / Ctrl+Y', label: 'Refazer (segmentos)' },
-  { keys: 'Ctrl+D',     label: 'Duplicar segmento' },
+  { keys: 'Space',             label: 'Play / Pause' },
+  { keys: 'K',                 label: 'Pause' },
+  { keys: 'J',                 label: 'Play reverso' },
+  { keys: 'L',                 label: 'Play (acumula velocidade)' },
+  { keys: '← / →',             label: '±1 frame' },
+  { keys: 'Shift+← / →',       label: '±10 frames' },
+  { keys: ', / .',              label: '±1 frame (Premiere-style)' },
+  { keys: 'I / O',             label: 'Marcar In / Out point' },
+  { keys: 'Shift+I / O',       label: 'Ir ao In / Out point' },
+  { keys: '[ / ]',             label: 'Ir ao In / Out point' },
+  { keys: 'Enter',             label: 'Confirmar corte' },
+  { keys: 'Delete',            label: 'Remover segmento selecionado' },
+  { keys: 'Home / End',        label: 'Início / Fim' },
+  { keys: 'Ctrl+Z',            label: 'Desfazer' },
+  { keys: 'Ctrl+Shift+Z / Y',  label: 'Refazer' },
+  { keys: 'Ctrl+D',            label: 'Duplicar segmento' },
 ];
