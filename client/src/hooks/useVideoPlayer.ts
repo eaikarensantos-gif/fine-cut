@@ -22,28 +22,26 @@ export function useVideoPlayer() {
         // --- Modo 1: preview com cortes (pula regiões fora dos segmentos) ---
         if (previewSegments && segments.length > 0) {
           const sorted = [...segments].sort((a, b) => a.start - b.start);
-
-          // Achar em qual segmento estamos
-          const inSeg = sorted.find((s) => t >= s.start && t < s.end);
+          const cur = v.currentTime;
+          const inSeg = sorted.find((s) => cur >= s.start && cur < s.end);
 
           if (!inSeg) {
-            // Fora de qualquer segmento → pular para o próximo
-            const next = sorted.find((s) => s.start > t);
+            const next = sorted.find((s) => s.start > cur);
             if (next) {
               v.currentTime = next.start;
             } else {
-              // Passou do último segmento → pausar
               v.pause();
               v.currentTime = sorted[sorted.length - 1].end;
             }
           }
         }
 
-        // --- Modo 2: pular silêncios (independente do modo de segmentos) ---
-        if (skipSilences && silences.length > 0) {
+        // --- Modo 2: pular silêncios (só se preview com cortes NÃO está ativo) ---
+        if (skipSilences && silences.length > 0 && !previewSegments) {
+          const cur = v.currentTime; // re-lê após possível jump
           for (const s of silences) {
             const end = s.end ?? v.duration;
-            if (t >= s.start && t < end) {
+            if (cur >= s.start && cur < end) {
               v.currentTime = Math.min(end + 0.05, v.duration);
               break;
             }

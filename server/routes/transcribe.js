@@ -5,8 +5,8 @@
  * Transcreve o vídeo usando Whisper LOCAL (openai-whisper via Python).
  * Retorna: { words: [{word, start, end}], segments: [{text, start, end}], text }
  *
- * Não requer API key — roda 100% local usando o modelo "small" (~1 GB RAM).
- * No Apple M2, transcreve ~5x real-time (vídeo de 9 min ≈ 2 min).
+ * Não requer API key — roda 100% local usando o modelo "tiny" (~72 MB RAM).
+ * No Apple Silicon, transcreve ~10x real-time (vídeo de 9 min ≈ 1 min).
  */
 
 const express   = require('express');
@@ -19,12 +19,13 @@ const ffmpegPath = require('ffmpeg-static');
 const router = express.Router();
 
 // Caminho do whisper CLI (instalado via pip3 install openai-whisper)
+// Suporta variável de ambiente WHISPER_PATH para ambientes customizados
 const WHISPER_PATHS = [
-  '/Users/karensantos/Library/Python/3.9/bin/whisper',
+  process.env.WHISPER_PATH,
   '/usr/local/bin/whisper',
   '/opt/homebrew/bin/whisper',
   'whisper',
-];
+].filter(Boolean);
 
 let _cachedWhisperPath = null;
 
@@ -89,8 +90,8 @@ router.post('/', async (req, res) => {
     console.log('[transcribe] Extraindo áudio...');
     await extractAudio(inputPath, tmpWav);
 
-    // 2. Roda Whisper local (modelo small para balancear qualidade/velocidade)
-    console.log('[transcribe] Rodando Whisper (modelo small)...');
+    // 2. Roda Whisper local (modelo tiny para velocidade máxima)
+    console.log('[transcribe] Rodando Whisper (modelo tiny)...');
     const result = await new Promise((resolve, reject) => {
       const args = [
         tmpWav,
@@ -106,22 +107,28 @@ router.post('/', async (req, res) => {
       const pythonBinDir = path.dirname(whisperBin);
       const extraPath = [ffmpegDir, pythonBinDir, process.env.PATH].join(':');
 
+      const WHISPER_TIMEOUT = 10 * 60 * 1000; // 10 minutos
       const proc = spawn(whisperBin, args, {
         env: { ...process.env, PATH: extraPath, PYTHONIOENCODING: 'utf-8' },
       });
 
+      const killTimer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error('Whisper excedeu o tempo limite de 10 minutos'));
+      }, WHISPER_TIMEOUT);
+
       let stderr = '';
       proc.stderr.on('data', (d) => {
         stderr += d.toString();
-        // Log progress lines
         const line = d.toString().trim();
         if (line && !line.startsWith('UserWarning')) {
           process.stderr.write(`[whisper] ${line}\n`);
         }
       });
       proc.stdout.on('data', () => {});
-      proc.on('error', reject);
+      proc.on('error', (err) => { clearTimeout(killTimer); reject(err); });
       proc.on('close', (code) => {
+        clearTimeout(killTimer);
         if (code !== 0) return reject(new Error(`Whisper exited ${code}: ${stderr.slice(-500)}`));
 
         // Lê o JSON de saída

@@ -25,11 +25,12 @@ router.get('/:fileId', (req, res) => {
       const buffer = Buffer.concat(chunks);
       const samples = buffer.length / 2; // 16-bit = 2 bytes por sample
       const peaks = [];
-      const blockSize = Math.floor(samples / (samplesPerSecond * 64 / samplesPerSecond));
 
-      // Reduzir para samplesPerSecond peaks por segundo usando RMS
-      const totalDesired = Math.ceil(samplesPerSecond * 64 / samplesPerSecond);
-      const step = Math.floor(samples / totalDesired) || 1;
+      // sps peaks por segundo × (samples / sampleRate=sps*64) = totalDesired peaks
+      const sampleRate = samplesPerSecond * 64;
+      const durationSec = samples / sampleRate;
+      const totalDesired = Math.max(1, Math.ceil(durationSec * samplesPerSecond));
+      const step = Math.max(1, Math.floor(samples / totalDesired));
 
       for (let i = 0; i < samples; i += step) {
         let sum = 0;

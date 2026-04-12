@@ -15,7 +15,7 @@ const EXPORT_LABELS: Record<ExportFormat, string> = {
 };
 
 const QUALITY_LABELS: Record<ExportQuality, { label: string; hint: string }> = {
-  draft:    { label: 'Rascunho', hint: '⚡ Stream copy — instantâneo, qualidade original' },
+  draft:    { label: 'Rascunho', hint: '⚡ Stream copy — mais rápido, corte no keyframe' },
   normal:   { label: 'Normal',   hint: '⚡ Stream copy — instantâneo, qualidade original' },
   high:     { label: 'Alta',     hint: '🐢 Re-encode — corte frame-preciso, mais lento' },
   lossless: { label: 'Lossless', hint: '🐢 Re-encode sem perdas — muito lento' },
@@ -159,7 +159,9 @@ export function Toolbar({ onOpenLibrary }: Props) {
       const r = await fetch(`${API}/detect/silence/${videoInfo.fileId}?noise=-30dB&duration=0.3`);
       const data = await r.json();
       setSilences(data.silences);
-      toast.done(tid, `${data.silences.length} silêncios encontrados`, 'Veja o painel abaixo');
+      toast.done(tid,
+        data.silences.length === 0 ? 'Nenhum silêncio encontrado' : `${data.silences.length} silêncio${data.silences.length > 1 ? 's' : ''} encontrado${data.silences.length > 1 ? 's' : ''}`,
+        'Veja o painel abaixo');
     } catch (err: any) { toast.fail(tid, 'Erro ao detectar silêncios', err.message); }
     finally { setLoading(null); }
   };
@@ -172,7 +174,9 @@ export function Toolbar({ onOpenLibrary }: Props) {
       const r = await fetch(`${API}/detect/scenes/${videoInfo.fileId}?threshold=10`);
       const data = await r.json();
       setScenes(data.scenes);
-      toast.done(tid, `${data.scenes.length} cenas detectadas`, 'Veja o painel abaixo');
+      toast.done(tid,
+        data.scenes.length === 0 ? 'Nenhuma cena detectada' : `${data.scenes.length} cena${data.scenes.length > 1 ? 's' : ''} detectada${data.scenes.length > 1 ? 's' : ''}`,
+        'Veja o painel abaixo');
     } catch (err: any) { toast.fail(tid, 'Erro ao detectar cenas', err.message); }
     finally { setLoading(null); }
   };
@@ -185,7 +189,9 @@ export function Toolbar({ onOpenLibrary }: Props) {
       const r = await fetch(`${API}/detect-breaths/${videoInfo.fileId}?duration=${videoInfo.duration}`);
       const data = await r.json();
       setBreaths(data.breaths);
-      toast.done(tid, `${data.count} respiro${data.count !== 1 ? 's' : ''} encontrado${data.count !== 1 ? 's' : ''}`, 'Veja a aba Respiros');
+      toast.done(tid,
+        data.count === 0 ? 'Nenhum respiro encontrado' : `${data.count} respiro${data.count > 1 ? 's' : ''} encontrado${data.count > 1 ? 's' : ''}`,
+        'Veja a aba Respiros');
     } catch (err: any) { toast.fail(tid, 'Erro ao detectar respiros', err.message); }
     finally { setLoading(null); }
   };

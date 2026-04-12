@@ -41,8 +41,9 @@ function generateThumb(inputPath, outputPath, atSecond = 3) {
 // GET /api/library — lista todos os arquivos
 router.get('/', (_req, res) => {
   const entries = loadLibrary().filter((e) => {
-    // Verificar se o arquivo ainda existe
-    return fs.existsSync(e.filePath);
+    // Verificar se o arquivo ainda existe (reconstrói caminho a partir de fileId)
+    const filePath = path.join(UPLOADS_DIR, e.fileId);
+    return fs.existsSync(filePath);
   });
   res.json(entries);
 });
@@ -70,7 +71,6 @@ router.post('/add', async (req, res) => {
       id: fileId,
       fileId,
       name: name || path.basename(filePath),
-      filePath,
       videoUrl: `/videos/${fileId}`,
       thumbUrl: `/thumbnails/${thumbFile}`,
       duration: info.duration,

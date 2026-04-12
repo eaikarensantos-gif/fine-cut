@@ -130,7 +130,7 @@ export function DetectionPanel() {
               }}
               title="Reproduz só os segmentos definidos — pula música, silêncio e qualquer região excluída"
             >
-              {previewSegments ? '✂ Preview com cortes' : '✂ Preview com cortes'}
+              {previewSegments ? '✂ Preview ativo' : '✂ Preview com cortes'}
             </button>
           )}
 
