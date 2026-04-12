@@ -220,6 +220,17 @@
   color: #e0e7ff !important;
 }
 
+/* Web Speech API button */
+.btn-speech {
+  background: #1a2a1a !important;
+  border-color: #22c55e !important;
+  color: #86efac !important;
+}
+.btn-speech:hover:not(:disabled) {
+  background: #14532d !important;
+  color: #bbf7d0 !important;
+}
+
 /* Modal de transcrição */
 .transcribe-modal-overlay {
   position: fixed;

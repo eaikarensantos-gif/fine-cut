@@ -163,6 +163,10 @@ interface EditorState {
   exportProgress: number;
   setExportProgress: (p: number) => void;
 
+  // Aba ativa no painel de detecção (para auto-switch programático)
+  activeDetectionTab: string | null;
+  setActiveDetectionTab: (tab: string | null) => void;
+
   // Reset completo ao trocar de vídeo
   resetEditor: () => void;
 }
@@ -240,6 +244,9 @@ export const useEditorStore = create<EditorState>((set) => ({
   exportProgress: 0,
   setExportProgress: (exportProgress) => set({ exportProgress }),
 
+  activeDetectionTab: null,
+  setActiveDetectionTab: (activeDetectionTab) => set({ activeDetectionTab }),
+
   resetEditor: () => set({
     videoInfo: null,
     waveformPeaks: [],
@@ -261,5 +268,6 @@ export const useEditorStore = create<EditorState>((set) => ({
     repeatGroups: [],
     exportQuality: 'normal',
     exportProgress: 0,
+    activeDetectionTab: null,
   }),
 }));

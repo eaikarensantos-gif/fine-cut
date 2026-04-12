@@ -31,11 +31,11 @@ const SAMPLE_RATE = 8000;   // Hz para extração PCM
 const HOP_MS      = 50;     // ms por janela RMS
 const HOP_SAMPLES = Math.round(SAMPLE_RATE * HOP_MS / 1000); // 400 samples
 
-const MIN_SEG_DUR    = 1.5;  // s — ignora segmentos muito curtos
-const MAX_SEG_DUR    = 40;   // s — ignora blocos muito longos (intro, etc.)
-const MAX_DUR_RATIO  = 2.0;  // razão máxima entre durações (takes mais lentos/rápidos variam bastante)
-const MAX_LAG_RATIO  = 0.30; // tolerância de lag (% da duração menor)
-const MIN_SIM_HARD   = 0.70; // limiar mínimo absoluto — abaixo disso é ruído de ritmo geral do locutor
+const MIN_SEG_DUR    = 1.0;  // s — ignora segmentos muito curtos
+const MAX_SEG_DUR    = 60;   // s — ignora blocos muito longos (intro, etc.)
+const MAX_DUR_RATIO  = 3.5;  // razão máxima entre durações — locutor pode variar bastante velocidade
+const MAX_LAG_RATIO  = 0.40; // tolerância de lag mais ampla (% da duração menor)
+const MIN_SIM_HARD   = 0.38; // limiar mínimo absoluto — bem baixo, threshold dinâmico faz o trabalho fino
 const MAX_TIME_GAP   = 600;  // s — retakes ocorrem dentro de 10 min (vídeos longos)
 
 // ── Extração de envelope PCM ─────────────────────────────────────────────────
@@ -99,7 +99,7 @@ function ncc(a, b) {
 // um fragmento curto (< MIN_SEG_DUR) que seria descartado. Ao mesclar esse
 // fragmento com o segmento anterior (se gap < SUB_MERGE_GAP), reconstituímos a
 // frase completa sem quebrar grupos que têm takes adjacentes.
-const SUB_MERGE_GAP = 0.85; // s — só mescla se o gap for menor que isso
+const SUB_MERGE_GAP = 1.8; // s — mescla pausas internas de fala mais agressivamente
 
 function mergeSubMinFragments(sounds) {
   const out = [];
@@ -117,9 +117,10 @@ function mergeSubMinFragments(sounds) {
 
 function autoSegment(inputPath, duration) {
   return new Promise((resolve) => {
-    // Threshold relativo alto para funcionar sem silêncio real (gravações de celular)
-    const NOISES = ['-6dB', '-8dB', '-10dB'];
-    const DUR    = 0.3;
+    // Tenta vários limiares de ruído — do mais agressivo (gravação ruidosa) ao mais sensível (estúdio)
+    // Cada nível é tentado até obter pelo menos 3 frases detectáveis
+    const NOISES = ['-6dB', '-10dB', '-15dB', '-20dB', '-25dB', '-30dB', '-35dB'];
+    const DUR    = 0.4; // pausa mínima entre frases (segundos)
 
     const tryNoise = (idx) => {
       if (idx >= NOISES.length) { resolve([]); return; }
@@ -269,8 +270,8 @@ router.post('/', async (req, res) => {
       return res.json({ groups: [], analyzed: rawSegs.length, message: 'Poucos segmentos detectados.' });
     }
 
-    // 2. Extrai envelopes (max 6 paralelos)
-    const BATCH = 6;
+    // 2. Extrai envelopes (max 8 paralelos)
+    const BATCH = 8;
     const envelopes = new Array(rawSegs.length);
     for (let i = 0; i < rawSegs.length; i += BATCH) {
       const batch = rawSegs.slice(i, i + BATCH);
@@ -298,11 +299,14 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // 4. Threshold: usa percentil 93 para separar outliers positivos (true repeats)
-    //    do ruído base; nunca abaixo de MIN_SIM_HARD (0.70)
+    // 4. Threshold dinâmico conservador:
+    //    - Usa percentil 80 como base (top 20% dos pares são "candidatos")
+    //    - Nunca abaixo de MIN_SIM_HARD (0.38)
+    //    - Em vídeos com muitas repetições, o p80 estará alto e isola bem os grupos
+    //    - Em vídeos sem repetições, p80 será baixo mas MIN_SIM_HARD ainda protege contra ruído
     allSims.sort((a, b) => a - b);
-    const p93  = allSims[Math.floor(allSims.length * 0.93)] ?? MIN_SIM_HARD;
-    const threshold = Math.max(MIN_SIM_HARD, p93);
+    const p80  = allSims[Math.floor(allSims.length * 0.80)] ?? MIN_SIM_HARD;
+    const threshold = Math.max(MIN_SIM_HARD, p80);
 
     // 5. Agrupa por clique (sem transitividade) e pontua
     const rawGroups = groupByClique(matrix, n, rawSegs, threshold);

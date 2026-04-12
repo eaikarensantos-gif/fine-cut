@@ -44,13 +44,51 @@ export function Toolbar({ onOpenLibrary }: Props) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
 
+  // Web Speech API refs
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const speechRecRef = useRef<any>(null);
+
   const {
     videoInfo, setVideoInfo, setWaveformPeaks, setSilences, setScenes,
     setAudioRegions, setBreaths, setRepeatGroups,
     setTranscriptWords, setTranscriptSegments,
     segments, exportQuality, setExportQuality, exportProgress, setExportProgress,
-    resetEditor,
+    resetEditor, setActiveDetectionTab,
   } = useEditorStore();
+
+  // ── Auto-detection pipeline após upload ───────────────────────────────────
+  const autoDetectAfterUpload = async (fileId: string) => {
+    // 1. Silêncios (rápido, em background)
+    try {
+      const r = await fetch(`${API}/detect/silence/${fileId}?noise=-30dB&duration=0.3`);
+      const data = await r.json();
+      setSilences(data.silences ?? []);
+    } catch {}
+
+    // 2. Repetições (auto-segmentação interna)
+    const tid = toast.loading('Detectando repetições...', 'Analisando áudio automaticamente');
+    try {
+      const r = await fetch(`${API}/detect-repeats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId }),
+      });
+      const data = await r.json();
+      setRepeatGroups(data.groups ?? []);
+      if (data.groups?.length > 0) {
+        toast.done(tid,
+          `${data.groups.length} grupo${data.groups.length > 1 ? 's' : ''} de repetição encontrado${data.groups.length > 1 ? 's' : ''}`,
+          `${data.analyzed} frases analisadas · limiar ${data.threshold} — aba Repetições`
+        );
+        setActiveDetectionTab('repeats');
+      } else {
+        toast.done(tid, 'Nenhuma repetição detectada', `${data.analyzed ?? 0} frases analisadas`);
+      }
+    } catch (err: any) {
+      toast.fail(tid, 'Erro ao analisar repetições', err.message);
+    }
+  };
 
   const handleUpload = async (file: File) => {
     // Limpa todos os dados do vídeo anterior
@@ -78,8 +116,12 @@ export function Toolbar({ onOpenLibrary }: Props) {
       if (xhr.status === 200) {
         const data = JSON.parse(xhr.responseText);
         setVideoInfo({ ...data, videoUrl: data.videoUrl });
-        if (data.hasAudio) loadWaveform(data.fileId);
         toast.done(tid, 'Vídeo carregado ✓', `${data.width}×${data.height} · ${data.fps?.toFixed(2)}fps`);
+        if (data.hasAudio) {
+          loadWaveform(data.fileId);
+          // Auto-detect: silêncios + repetições
+          autoDetectAfterUpload(data.fileId);
+        }
       } else {
         toast.fail(tid, 'Erro no upload', `Status ${xhr.status}`);
       }
@@ -96,22 +138,19 @@ export function Toolbar({ onOpenLibrary }: Props) {
     } catch {}
   };
 
-  const transcribeAndDetect = async () => {
+  // ── Transcrição com Whisper (servidor local) ───────────────────────────────
+  const transcribeWhisper = async () => {
     if (!videoInfo?.fileId) return;
     setLoading('transcribe');
-    const tid = toast.loading('Transcrevendo áudio...', 'Whisper local — pode levar 1-2 min');
+    const tid = toast.loading('Transcrevendo com Whisper...', 'Modelo tiny — pode levar 1-2 min');
 
-    // Timer de progresso para dar feedback visual enquanto whisper roda
     const t0 = Date.now();
     const timer = setInterval(() => {
       const elapsed = Math.round((Date.now() - t0) / 1000);
-      useToastStore.getState().update(tid, {
-        detail: `Whisper local rodando… ${elapsed}s`,
-      });
+      useToastStore.getState().update(tid, { detail: `Whisper rodando… ${elapsed}s` });
     }, 1000);
 
     try {
-      // 1. Transcrever (local, sem API key)
       const r1 = await fetch(`${API}/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,7 +167,6 @@ export function Toolbar({ onOpenLibrary }: Props) {
         detail: `${t.words?.length ?? 0} palavras em ${elapsed}s`,
       });
 
-      // 2. Detectar repetições via texto
       const r2 = await fetch(`${API}/detect-repeats-transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,10 +181,141 @@ export function Toolbar({ onOpenLibrary }: Props) {
           : 'Nenhuma repetição detectada',
         `Texto · ${t.words?.length ?? 0} palavras · ${d.groups.length} grupos · ${totalElapsed}s`
       );
+      if (d.groups.length > 0) setActiveDetectionTab('repeats');
     } catch (err: any) {
       clearInterval(timer);
-      toast.fail(tid, 'Erro na transcrição', err.message);
+      toast.fail(tid, 'Whisper indisponível', `${err.message} — tente 🎤 Transcrever (browser)`);
     } finally {
+      setLoading(null);
+    }
+  };
+
+  // ── Transcrição com Web Speech API (browser, sem servidor) ─────────────────
+  const transcribeBrowser = async () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      toast.error('Chrome/Edge necessário', 'A transcrição no browser requer Google Chrome ou Microsoft Edge com Web Speech API.');
+      return;
+    }
+    const videoEl = document.querySelector('video') as HTMLVideoElement;
+    if (!videoEl || !videoEl.src) {
+      toast.error('Vídeo não encontrado', 'Carregue um vídeo primeiro');
+      return;
+    }
+
+    setLoading('transcribe');
+    const tid = toast.loading('Transcrevendo no browser...', 'O vídeo será reproduzido — aguarde o fim');
+
+    // Conecta o áudio do vídeo ao SpeechRecognition via AudioContext
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      if (!audioSrcRef.current) {
+        const src = ctx.createMediaElementSource(videoEl);
+        audioSrcRef.current = src;
+        const dest = ctx.createMediaStreamDestination();
+        src.connect(dest);
+        src.connect(ctx.destination); // mantém áudio audível
+
+        const recognition = new SR();
+        speechRecRef.current = recognition;
+        recognition.lang = 'pt-BR';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        const segments: { text: string; start: number; end: number }[] = [];
+        let segStart = 0;
+        const origTime = videoEl.currentTime;
+        const duration = videoEl.duration;
+
+        recognition.onresult = (ev: any) => {
+          for (let i = ev.resultIndex; i < ev.results.length; i++) {
+            if (ev.results[i].isFinal) {
+              const text = ev.results[i][0].transcript.trim();
+              const end = videoEl.currentTime;
+              if (text) {
+                segments.push({ text, start: segStart, end });
+                segStart = end;
+                const pct = Math.round((end / duration) * 100);
+                useToastStore.getState().update(tid, {
+                  detail: `${pct}% — "${text.slice(0, 48)}"`,
+                });
+              }
+            }
+          }
+        };
+
+        recognition.onerror = (ev: any) => {
+          if (ev.error !== 'no-speech') {
+            toast.fail(tid, 'Erro no reconhecimento', ev.error);
+            setLoading(null);
+          }
+        };
+
+        recognition.onend = async () => {
+          videoEl.pause();
+          videoEl.currentTime = origTime;
+          setTranscriptSegments(segments);
+
+          if (segments.length > 0) {
+            // Converte segmentos em palavras aproximadas
+            const words = segments.flatMap(seg => {
+              const wds = seg.text.split(/\s+/);
+              const dur = (seg.end - seg.start) / Math.max(wds.length, 1);
+              return wds.filter(Boolean).map((w, i) => ({
+                word: w,
+                start: seg.start + i * dur,
+                end:   seg.start + (i + 1) * dur,
+              }));
+            });
+            setTranscriptWords(words);
+
+            try {
+              const r2 = await fetch(`${API}/detect-repeats-transcript`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ words }),
+              });
+              const d = await r2.json();
+              setRepeatGroups(d.groups ?? []);
+              toast.done(tid,
+                d.groups?.length > 0
+                  ? `${d.groups.length} grupo${d.groups.length > 1 ? 's' : ''} de repetição encontrado${d.groups.length > 1 ? 's' : ''}`
+                  : 'Nenhuma repetição detectada',
+                `${words.length} palavras · ${segments.length} segmentos`
+              );
+              if (d.groups?.length > 0) setActiveDetectionTab('repeats');
+            } catch {
+              toast.done(tid, 'Transcrição concluída', `${segments.length} segmentos — aba Transcrição`);
+              setActiveDetectionTab('transcript');
+            }
+          } else {
+            toast.done(tid, 'Nenhuma fala detectada', 'Verifique o volume do vídeo e tente novamente');
+          }
+
+          setLoading(null);
+          speechRecRef.current = null;
+        };
+
+        // Inicia do começo
+        videoEl.currentTime = 0;
+        videoEl.playbackRate = 1.0;
+        await videoEl.play();
+        recognition.start();
+
+        videoEl.addEventListener('ended', () => recognition.stop(), { once: true });
+      } else {
+        // audioSrc já criado (segunda chamada) — recria recognition
+        toast.fail(tid, 'Reinicie a página para transcrever novamente', 'O contexto de áudio já está em uso');
+        setLoading(null);
+      }
+    } catch (err: any) {
+      toast.fail(tid, 'Erro ao inicializar áudio', err.message);
       setLoading(null);
     }
   };
@@ -222,6 +391,7 @@ export function Toolbar({ onOpenLibrary }: Props) {
           ? 'Veja a aba Repetições'
           : `${data.analyzed} ${data.autoSegmented ? 'frases' : 'segmentos'} analisados · limiar ${data.threshold}`
       );
+      if (data.groups.length > 0) setActiveDetectionTab('repeats');
     } catch (err: any) { toast.fail(tid, 'Erro ao analisar repetições', err.message); }
     finally { setLoading(null); }
   };
@@ -336,8 +506,25 @@ export function Toolbar({ onOpenLibrary }: Props) {
         <button className="btn btn-repeats" onClick={detectRepeats} disabled={!uploadReady || !!loading} title="Detecta trechos repetidos e escolhe o melhor take (funciona sem cortes prévios)">
           {loading === 'repeats' ? '⏳ Analisando...' : '🔁 Repetições'}
         </button>
-        <button className="btn btn-transcribe" onClick={transcribeAndDetect} disabled={!uploadReady || !!loading} title="Transcreve com Whisper local e detecta repetições exatas por texto — mais preciso, sem API key">
-          {loading === 'transcribe' ? '⏳ Transcrevendo...' : '📝 Transcrever'}
+
+        {/* Transcrição: Whisper (servidor) */}
+        <button
+          className="btn btn-transcribe"
+          onClick={transcribeWhisper}
+          disabled={!uploadReady || !!loading}
+          title="Transcreve com Whisper local (Python) e detecta repetições exatas por texto — requer Whisper instalado"
+        >
+          {loading === 'transcribe' ? '⏳ Transcrevendo...' : '📝 Whisper'}
+        </button>
+
+        {/* Transcrição: Web Speech API (browser, sem servidor) */}
+        <button
+          className="btn btn-speech"
+          onClick={transcribeBrowser}
+          disabled={!uploadReady || !!loading}
+          title="Transcreve no browser via Web Speech API (Chrome/Edge) — reproduz o vídeo e captura a fala em tempo real"
+        >
+          {loading === 'transcribe' ? '⏳ Ouvindo...' : '🎤 Browser'}
         </button>
 
         <div className="toolbar-sep" />
@@ -394,7 +581,7 @@ export function Toolbar({ onOpenLibrary }: Props) {
       )}
 
       <div className="toolbar-shortcuts">
-        <span>J</span>rev <span>K</span>pause <span>L</span>play <span>I</span>in <span>O</span>out <span>↵</span>cortar
+        <span>J</span>rev <span>K</span>pause <span>L</span>play <span>I</span>in <span>O</span>out <span>↵</span>cortar <span>←→</span>take
       </div>
 
     </div>
