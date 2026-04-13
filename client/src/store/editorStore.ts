@@ -178,6 +178,8 @@ interface EditorState {
   setActiveDetectionTab: (tab: string | null) => void;
 
   resetEditor: () => void;
+  /** Limpa análise/segmentos mas mantém videoInfo — evita desmonte do <video> */
+  resetAnalysis: () => void;
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -303,6 +305,32 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   resetEditor: () => set({
     videoInfo:       null,
+    waveformPeaks:   [],
+    keyframes:       [],
+    silences:        [],
+    scenes:          [],
+    currentTime:     0,
+    isPlaying:       false,
+    playbackRate:    1,
+    inPoint:         null,
+    outPoint:        null,
+    segments:        [],
+    segmentHistory:  [],
+    segmentFuture:   [],
+    selectedSegmentId: null,
+    skipSilences:    false,
+    previewSegments: false,
+    audioRegions:    [],
+    breaths:         [],
+    transcriptWords: [],
+    transcriptSegments: [],
+    repeatGroups:    [],
+    exportProgress:  0,
+    activeDetectionTab: null,
+  }),
+
+  // Igual resetEditor, mas preserva videoInfo para evitar desmonte do <video>
+  resetAnalysis: () => set({
     waveformPeaks:   [],
     keyframes:       [],
     silences:        [],

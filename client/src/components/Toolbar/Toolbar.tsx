@@ -56,7 +56,7 @@ export function Toolbar({ onOpenLibrary }: Props) {
     setTranscriptWords, setTranscriptSegments,
     setKeyframes,
     segments, exportQuality, setExportQuality, exportProgress, setExportProgress,
-    resetEditor, setActiveDetectionTab,
+    resetAnalysis, setActiveDetectionTab,
   } = useEditorStore();
 
   // ── Auto-detection pipeline após upload ───────────────────────────────────
@@ -93,12 +93,16 @@ export function Toolbar({ onOpenLibrary }: Props) {
   };
 
   const handleUpload = async (file: File) => {
-    // Limpa todos os dados do vídeo anterior
-    resetEditor();
-
+    // Cria o blob ANTES de limpar para evitar tela preta entre uploads:
+    // a ordem correta é: novo vídeo visível → limpa análise anterior
     const blobUrl = URL.createObjectURL(file);
     const localMeta = await getLocalVideoMeta(file);
+
+    // 1. Mostra o novo vídeo imediatamente (sem desmonte do <video> anterior)
     setVideoInfo({ fileId: '', videoUrl: blobUrl, duration: localMeta.duration, fps: 30, width: localMeta.width, height: localMeta.height, hasAudio: true });
+
+    // 2. Limpa segmentos/análise do vídeo anterior (preserva videoInfo)
+    resetAnalysis();
 
     const tid = toast.loading('Enviando vídeo...', file.name);
     setUploadProgress(0);
