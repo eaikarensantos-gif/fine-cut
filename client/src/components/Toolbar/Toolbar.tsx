@@ -117,7 +117,10 @@ export function Toolbar({ onOpenLibrary }: Props) {
       setUploadProgress(null);
       if (xhr.status === 200) {
         const data = JSON.parse(xhr.responseText);
-        setVideoInfo({ ...data, videoUrl: data.videoUrl });
+        // Mantém o blobUrl para playback — evita tela preta causada por
+        // recarregamento do elemento <video> ao trocar o src.
+        // O fileId e metadados do servidor são suficientes para processar.
+        setVideoInfo({ ...data, videoUrl: blobUrl });
         toast.done(tid, 'Vídeo carregado ✓', `${data.width}×${data.height} · ${data.fps?.toFixed(2)}fps`);
         if (data.hasAudio) {
           loadWaveform(data.fileId);
